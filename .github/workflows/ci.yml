@@ -87,7 +87,7 @@ jobs:
     needs: [ts]
     services:
       postgres:
-        image: postgres:17
+        image: pgvector/pgvector:pg17 # the api's migrations create the `vector` extension (PDQ search)
         env:
           POSTGRES_USER: stamper
           POSTGRES_PASSWORD: stamper

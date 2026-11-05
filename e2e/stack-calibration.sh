@@ -122,6 +122,8 @@ CALIBRATION_EXAMPLES="T1AQ-QJ5V-3|Harbour at dusk|/examples/PDSE8WYHH.jpg|demo;T
 web_env=(NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_CHAIN_ID=314159 NEXT_PUBLIC_RPC_URLS="$RPCS"
   NEXT_PUBLIC_REGISTRY_ADDRESS="$(json_get "$DEP" registry)" NEXT_PUBLIC_RESOLVER_ADDRESS="$(json_get "$DEP" resolver)"
   NEXT_PUBLIC_API_URL="$PROXY/api" NEXT_PUBLIC_VERIFY_BASE_URL="$WEB")
+# the QR scanner loads public/zxing_reader.wasm, which `pnpm dev`/`pnpm build` copy and `next dev` alone does not
+(cd "$EXPLORER/apps/web" && node scripts/copy-wasm.mjs)
 start explorer "$EXPLORER/apps/web" env "${web_env[@]}" NEXT_PUBLIC_ORIGIN="$WEB" NEXT_PUBLIC_APP_URL="$APPURL" \
   NEXT_PUBLIC_MIRROR_URL="$PROXY/api/m" NEXT_PUBLIC_FILBEAM_PAYER="$FOC_PAYER_ADDRESS" \
   NEXT_PUBLIC_EXAMPLES="${NEXT_PUBLIC_EXAMPLES:-$CALIBRATION_EXAMPLES}" \

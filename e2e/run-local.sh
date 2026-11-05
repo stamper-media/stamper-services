@@ -207,6 +207,8 @@ else
   start cors-proxy "$E2E_DIR" env CORS_PROXY_PORT="$E2E_PROXY_PORT" \
     CORS_PROXY_ROUTES="api=$API,sp=http://127.0.0.1:$E2E_MOCK_SP_PORT" ./node_modules/.bin/tsx lib/cors-proxy.ts
   snapshot_web
+  # the QR scanner loads public/zxing_reader.wasm, which `pnpm dev`/`pnpm build` copy and `next dev` alone does not
+  (cd "$WEB_DIR" && node scripts/copy-wasm.mjs)
   start web "$WEB_DIR" env NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_CHAIN_ID=31337 \
     NEXT_PUBLIC_RPC_URLS="$RPC,http://localhost:$E2E_ANVIL_PORT" \
     NEXT_PUBLIC_REGISTRY_ADDRESS="$REG" NEXT_PUBLIC_RESOLVER_ADDRESS="$RESOLVER_ADDRESS" \
