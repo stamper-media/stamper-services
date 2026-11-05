@@ -1,0 +1,51 @@
+# deps
+node_modules/
+.pnpm-store/
+# builds
+dist/
+build/
+out/
+.next/
+.expo/
+.turbo/
+*.tsbuildinfo
+# foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/**/dry-run/
+# env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# python
+__pycache__/
+.venv/
+*.pyc
+# os/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+# logs & scratch
+*.log
+tmp/
+
+# build coordination locks
+.pnpm.flock
+.heavy.flock
+
+# test output
+coverage/
+test-results/
+playwright-report/
+
+# e2e output and the local Calibration stack (e2e/stack-calibration.sh)
+e2e/out/
+e2e/out-calibration/
+e2e/.stack-calibration/
+
+# local links to an ml venv and the TrustMark weights (never committed)
+services/ml/.venv
+services/ml/models

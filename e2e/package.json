@@ -1,0 +1,29 @@
+{
+  "name": "@stamper/e2e",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Stamper whole-flow e2e: anvil + mocks locally, Calibration when keys exist",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --reporter=dot",
+    "e2e:local": "./run-local.sh",
+    "e2e:calibration": "./run-calibration.sh"
+  },
+  "dependencies": {
+    "@stamper/contracts-abi": "^0.1.0",
+    "@stamper/core": "^0.1.0",
+    "@stamper/minimise": "^0.1.0",
+    "sharp": "catalog:",
+    "tsx": "catalog:",
+    "viem": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

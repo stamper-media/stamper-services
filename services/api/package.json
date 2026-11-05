@@ -1,0 +1,58 @@
+{
+  "name": "@stamper/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Stamper custodian (ROLE=api) and key-free worker (ROLE=worker): one image, ROLE switch",
+  "main": "./dist/main.js",
+  "exports": {
+    ".": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json && cp -r src/db/migrations dist/db/migrations",
+    "typecheck": "tsc -p tsconfig.json --noEmit && for c in test/*/tsconfig.json; do tsc -p \"$c\" --noEmit || exit 1; done",
+    "test": "vitest run --reporter=dot",
+    "test:anvil": "vitest run --reporter=dot",
+    "db:generate": "drizzle-kit generate",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
+    "@filoz/synapse-sdk": "catalog:",
+    "@hono/node-server": "catalog:",
+    "@stamper/contracts-abi": "^0.1.0",
+    "@stamper/core": "^0.1.0",
+    "@stamper/foc": "^0.1.0",
+    "@stamper/marking": "^0.1.0",
+    "@stamper/minimise": "^0.1.0",
+    "drizzle-orm": "catalog:",
+    "exifr": "catalog:",
+    "googleapis": "catalog:",
+    "hono": "catalog:",
+    "node-app-attest": "catalog:",
+    "pg": "catalog:",
+    "pg-boss": "catalog:",
+    "pino": "catalog:",
+    "pixelmatch": "catalog:",
+    "prom-client": "catalog:",
+    "sharp": "catalog:",
+    "undici": "catalog:",
+    "viem": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "drizzle-kit": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

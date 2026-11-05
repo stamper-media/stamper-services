@@ -1,0 +1,207 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+  FOUNDRY_VERSION: "v1.3.5"
+  SHELLCHECK_VERSION: "v0.11.0"
+  SHELLCHECK_SHA256: "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+  # ml/.venv + TrustMark weights are cached under one key, written by `ml`, read by `e2e-local`.
+  # Bump to invalidate. The rest of the key (python version, requirements and fetch-weights hashes)
+  # is spelled out in both jobs and must stay identical.
+  ML_CACHE_VERSION: "ml-v1"
+
+jobs:
+  ts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+
+  ml:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: services/ml
+    env:
+      # optional mirror of the TrustMark weights (DESIGN §13.12); the Adobe CDN is the fallback
+      TRUSTMARK_WEIGHTS_URL: ${{ vars.TRUSTMARK_WEIGHTS_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: py
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Cache ml venv + TrustMark weights
+        id: ml-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            services/ml/.venv
+            services/ml/models
+          key: ${{ env.ML_CACHE_VERSION }}-${{ runner.os }}-py${{ steps.py.outputs.python-version }}-${{ hashFiles('services/ml/requirements*.txt', 'services/ml/scripts/fetch-weights.py') }}
+      - name: Install requirements into .venv
+        if: steps.ml-cache.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r requirements-dev.txt
+      - name: Fetch TrustMark weights (md5-checked; no-op when cached)
+        run: .venv/bin/python scripts/fetch-weights.py
+      - name: pytest (fails if the TrustMark weight tests skipped)
+        shell: bash
+        run: |
+          .venv/bin/python -m pytest -q 2>&1 | tee "$RUNNER_TEMP/pytest.log"
+          if grep -q 'TrustMark Q weights unusable' "$RUNNER_TEMP/pytest.log"; then
+            echo "::error::the TrustMark weight tests skipped: weights missing or failing their md5 check"
+            exit 1
+          fi
+
+  anvil-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [ts]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: stamper
+          POSTGRES_PASSWORD: stamper
+          POSTGRES_DB: stamper_test
+        ports: ["55499:5432"]
+        options: >-
+          --health-cmd "pg_isready -U stamper" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: stamper-services
+    env:
+      ANVIL_PORT: "28545"
+      ANVIL_RPC_URL: http://127.0.0.1:28545
+      DATABASE_URL: postgres://stamper:stamper@127.0.0.1:55499/stamper_test
+      FOC_MODE: mock
+      ATTEST_MODE: stub
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: stamper-services
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/stamper-protocol
+          path: stamper-protocol
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: stamper-services/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: stamper-services/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Start anvil
+        run: |
+          anvil --port "$ANVIL_PORT" --silent &
+          for _ in $(seq 1 30); do cast chain-id --rpc-url "$ANVIL_RPC_URL" >/dev/null 2>&1 && exit 0; sleep 1; done
+          echo "anvil did not start" >&2; exit 1
+      - name: "@anvil tests (api; contracts from stamper-protocol)"
+        run: pnpm --filter @stamper/api --if-present test:anvil
+
+  e2e-local:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [ts]
+    defaults:
+      run:
+        working-directory: stamper-services
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: stamper-services
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/stamper-protocol
+          path: stamper-protocol
+          submodules: recursive
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/stamper-explorer
+          path: stamper-explorer
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: stamper-services/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: stamper-services/pnpm-lock.yaml
+      - id: py
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # ml runs only when the ml job has already cached its venv + weights for this exact key
+      # (same key expression as the ml job); otherwise E2E_SKIP_ML=1 and the RELATED leg skips.
+      - name: Restore the cached ml venv + TrustMark weights (if any)
+        id: ml-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            stamper-services/services/ml/.venv
+            stamper-services/services/ml/models
+          key: ${{ env.ML_CACHE_VERSION }}-${{ runner.os }}-py${{ steps.py.outputs.python-version }}-${{ hashFiles('stamper-services/services/ml/requirements*.txt', 'stamper-services/services/ml/scripts/fetch-weights.py') }}
+      - name: Install ffmpeg (video fixture)
+        run: command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg; }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Install stamper-protocol and stamper-explorer
+        run: |
+          (cd ../stamper-protocol && pnpm install --frozen-lockfile)
+          (cd ../stamper-explorer && pnpm install --frozen-lockfile)
+      - name: Compile contracts (keeps the cold via_ir build out of the timed run)
+        run: forge build --root ../stamper-protocol/contracts
+      - name: Install Chromium for Playwright (verify.spec)
+        run: cd ../stamper-explorer && pnpm --filter @stamper/explorer exec playwright install --with-deps chromium
+      - name: e2e/run-local.sh
+        env:
+          E2E_SKIP_ML: ${{ steps.ml-cache.outputs.cache-hit == 'true' && '0' || '1' }}
+        run: e2e/run-local.sh
+      - name: Upload the e2e report and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-local
+          path: stamper-services/e2e/out
+          if-no-files-found: ignore
+          retention-days: 7
+

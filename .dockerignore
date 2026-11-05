@@ -1,0 +1,17 @@
+# Build context: only sources. Images install their own dependencies.
+**/node_modules
+**/.next
+**/dist
+**/.expo
+**/*.tsbuildinfo
+**/test-results
+**/playwright-report
+**/coverage
+.git
+e2e/out
+e2e/out-calibration
+e2e/.stack-calibration
+services/ml/.venv
+services/ml/models
+.heavy.flock
+.pnpm.flock
